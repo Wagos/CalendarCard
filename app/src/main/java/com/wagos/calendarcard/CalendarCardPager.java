@@ -11,9 +11,15 @@ public class CalendarCardPager extends ViewPager{
 
     public CalendarCardPager(Context context) {
         super(context);
+        init();
     }
 
     public CalendarCardPager(Context context, AttributeSet attrs) {
         super(context, attrs);
+        init();
+    }
+
+    private void init() {
+        setAdapter(new CalendarCardPagerAdapter());
     }
 }
