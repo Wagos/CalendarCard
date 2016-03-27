@@ -11,20 +11,22 @@ import java.util.Calendar;
 public class CalendarCardPagerAdapter extends RecyclePagerAdapter {
     @Override
     protected Object getItem(int position) {
-        return position;
+        return position - CalendarCardPager.OFFSET;
     }
 
     @Override
     protected View getView(Object object, View convertView, ViewGroup parent) {
         CalendarCardView calendar;
-        if(convertView == null){
+        if (convertView == null) {
             calendar = new CalendarCardView(parent.getContext());
-        }else {
+        } else {
             calendar = (CalendarCardView) convertView;
         }
 
         Calendar cal = Calendar.getInstance();
         cal.add(Calendar.MONTH, (Integer) object);
+
+        calendar.setDate(cal);
 
         return calendar;
     }

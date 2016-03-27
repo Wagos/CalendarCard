@@ -7,7 +7,9 @@ import android.util.AttributeSet;
 /**
  * Created by Wagos
  */
-public class CalendarCardPager extends ViewPager{
+public class CalendarCardPager extends ViewPager {
+
+    public static final int OFFSET = Integer.MAX_VALUE / 2;
 
     public CalendarCardPager(Context context) {
         super(context);
@@ -21,5 +23,6 @@ public class CalendarCardPager extends ViewPager{
 
     private void init() {
         setAdapter(new CalendarCardPagerAdapter());
+        setCurrentItem(OFFSET);
     }
 }

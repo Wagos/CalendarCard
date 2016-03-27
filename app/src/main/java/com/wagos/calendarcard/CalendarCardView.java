@@ -6,24 +6,30 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Build;
-import android.os.Bundle;
-import android.support.v4.view.accessibility.AccessibilityNodeInfoCompat;
-import android.support.v4.widget.ExploreByTouchHelper;
 import android.util.AttributeSet;
 import android.view.View;
-import android.view.accessibility.AccessibilityEvent;
 
-import java.util.List;
+import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Created by Wagos
  */
-public class CalendarCardView extends View{
+public class CalendarCardView extends View {
     private int width;
     private Paint paint;
     private int textSize;
     private Paint backgroundPaint;
     private Paint circlePaint;
+    private int headerHeight;
+    private float textOffset;
+    private String monthName;
+    private int firstDayOfWeek;
+    private int dayCount;
+    private int firstDayOfMonth;
+    private int previousDayCount;
+    private int[] dayNumbers = new int[42];
+    private String[] dayLabels = new String[7];
 
     public CalendarCardView(Context context) {
         super(context);
@@ -50,7 +56,7 @@ public class CalendarCardView extends View{
         paint = new Paint();
         paint.setFakeBoldText(true);
         paint.setAntiAlias(true);
-        paint.setColor(Color.RED);
+        paint.setColor(Color.BLACK);
         textSize = getResources().getDimensionPixelSize(R.dimen.month_text_size);
         paint.setTextSize(textSize);
         paint.setTextAlign(Paint.Align.CENTER);
@@ -62,21 +68,22 @@ public class CalendarCardView extends View{
 
         circlePaint = new Paint();
         circlePaint.setColor(Color.BLUE);
-        circlePaint.setStyle(Paint.Style.FILL);
+        circlePaint.setStyle(Paint.Style.STROKE);
+
+        headerHeight = getResources().getDimensionPixelSize(R.dimen.calendar_card_header_height);
+        float textHeight = paint.descent() - paint.ascent();
+        textOffset = (textHeight / 2) - paint.descent();
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int size = MeasureSpec.getSize(widthMeasureSpec);
-        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), size*6/7);
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), size * 6 / 7 + headerHeight);
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         width = w;
-//
-        // Invalidate cached accessibility information.
-//        mTouchHelper.invalidateRoot();
     }
 
     @Override
@@ -87,74 +94,57 @@ public class CalendarCardView extends View{
     }
 
     private void drawMonthNums(Canvas canvas) {
-        float cellSize = width /7;
-        float x = cellSize/2;
-        float textHeight = paint.descent() - paint.ascent();
-        float textOffset = (textHeight / 2) - paint.descent();
-        float y = x + textOffset;
+        float cellSize = width / 7;
+        float x = cellSize / 2;
+
+        float y = x + textOffset + headerHeight;
         float cellX = 0;
-        float cellY = 0;
+        float cellY = headerHeight;
         int counter = 0;
-        for(int i=0; i < 6; i++){
-            for(int j=1; j<8; j++){
-                canvas.drawRect(cellX+1, cellY+1, cellX + cellSize-1, cellY + cellSize-1, backgroundPaint);
+        for (int i = 0; i < 6; i++) {
+            for (int j = 1; j < 8; j++) {
+//                canvas.drawRect(cellX+1, cellY+1, cellX + cellSize-1, cellY + cellSize-1, backgroundPaint);
+//                canvas.drawRect(cellX, cellY, cellX + cellSize, cellY + cellSize, circlePaint);
 //                canvas.drawCircle(x, cellY + cellSize / 2, cellSize / 2, circlePaint);
-                canvas.drawText(String.valueOf(++counter), x, y, paint);
-                x+=cellSize;
-                cellX+=cellSize;
+                canvas.drawText(String.valueOf(dayNumbers[counter++]), x, y, paint);
+                x += cellSize;
+                cellX += cellSize;
             }
-            cellY+=cellSize;
-            y+=cellSize;
-            x=cellSize/2;
-            cellX=0;
+            cellY += cellSize;
+            y += cellSize;
+            x = cellSize / 2;
+            cellX = 0;
         }
     }
 
     private void drawMonthDayLabels(Canvas canvas) {
-
+        float cellSize = width / 7;
+        float x = cellSize / 2;
+        for (int i = 0; i < 7; i++) {
+            canvas.drawText(dayLabels[i], x, headerHeight - textOffset, paint);
+            x += cellSize;
+        }
     }
 
     private void drawMonthTitle(Canvas canvas) {
-        canvas.drawText("January", width/2, textSize, paint);
+        canvas.drawText(monthName, width / 2, headerHeight / 2 + textOffset, paint);
     }
 
-    /**
-     * Provides a virtual view hierarchy for interfacing with an accessibility service.
-     */
-    private class MonthViewTouchHelper extends ExploreByTouchHelper {
-
-        /**
-         * Factory method to create a new {@link ExploreByTouchHelper}.
-         *
-         * @param forView View whose logical children are exposed by this helper.
-         */
-        public MonthViewTouchHelper(View forView) {
-            super(forView);
-        }
-
-        @Override
-        protected int getVirtualViewAt(float x, float y) {
-            return 0;
-        }
-
-        @Override
-        protected void getVisibleVirtualViews(List<Integer> virtualViewIds) {
-
-        }
-
-        @Override
-        protected void onPopulateEventForVirtualView(int virtualViewId, AccessibilityEvent event) {
-
-        }
-
-        @Override
-        protected void onPopulateNodeForVirtualView(int virtualViewId, AccessibilityNodeInfoCompat node) {
-
-        }
-
-        @Override
-        protected boolean onPerformActionForVirtualView(int virtualViewId, int action, Bundle arguments) {
-            return false;
+    public void setDate(Calendar month) {
+        monthName = month.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault());
+        firstDayOfWeek = month.getFirstDayOfWeek();
+        dayCount = month.getActualMaximum(Calendar.DAY_OF_MONTH);
+        month.set(Calendar.DAY_OF_MONTH, 1);
+        firstDayOfMonth = month.get(Calendar.DAY_OF_WEEK);
+        month.add(Calendar.MONTH, -1);
+        previousDayCount = month.getActualMaximum(Calendar.DAY_OF_MONTH);
+        month.set(Calendar.DAY_OF_WEEK, firstDayOfWeek);
+        for (int i = 0; i < dayNumbers.length; i++) {
+            dayNumbers[i] = month.get(Calendar.DAY_OF_MONTH);
+            if (i < 7) {
+                dayLabels[i] = month.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT, Locale.getDefault());
+            }
+            month.add(Calendar.DAY_OF_MONTH, 1);
         }
     }
 }
