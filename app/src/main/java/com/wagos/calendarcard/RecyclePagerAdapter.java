@@ -31,8 +31,8 @@ import java.util.Iterator;
  */
 public abstract class RecyclePagerAdapter extends PagerAdapter {
 
-    ArrayList<Object> instantiatedItems = new ArrayList<>();
-    ArrayList<Object> destroyedItems = new ArrayList<>();
+    private ArrayList<Object> instantiatedItems = new ArrayList<>();
+    private ArrayList<Object> destroyedItems = new ArrayList<>();
 
     @Override
     public final void startUpdate(ViewGroup container) {

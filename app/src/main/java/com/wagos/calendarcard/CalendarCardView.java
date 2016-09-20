@@ -1,5 +1,7 @@
 package com.wagos.calendarcard;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -8,13 +10,16 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Build;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 
+import java.util.ArrayDeque;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Queue;
 
 /**
  * Created by Wagos
@@ -29,11 +34,21 @@ public class CalendarCardView extends View {
     private float textOffset;
     private String monthName;
     private int[] dayNumbers = new int[42];
+    private long[] dayTimestamp = new long[42];
     private String[] dayLabels = new String[7];
-    private ValueAnimator rippleAnimator = ValueAnimator.ofFloat(0, 0);
+    private HashMap<Integer, ValueAnimator> animatorMap = new HashMap<>();
+    private Queue<ValueAnimator> reusableAnimators = new ArrayDeque<>();
     private int touchedPosition = -1;
     private float cellSize;
     private Paint ripplePaint;
+
+    ValueAnimator.AnimatorUpdateListener updateListener = new ValueAnimator.AnimatorUpdateListener() {
+        @Override
+        public void onAnimationUpdate(ValueAnimator animation) {
+            postInvalidate();
+        }
+    };
+    private Calendar startDate;
 
     public CalendarCardView(Context context) {
         super(context);
@@ -70,25 +85,57 @@ public class CalendarCardView extends View {
         backgroundPaint.setColor(Color.WHITE);
         backgroundPaint.setStyle(Paint.Style.FILL);
 
-        circlePaint = new Paint();
-        circlePaint.setColor(Color.BLUE);
-        circlePaint.setStyle(Paint.Style.STROKE);
-
-        ripplePaint = new Paint(circlePaint);
+        ripplePaint = new Paint();
+        ripplePaint.setAntiAlias(true);
+        ripplePaint.setColor(Color.BLUE);
         ripplePaint.setStyle(Paint.Style.FILL);
+
+        circlePaint = new Paint(ripplePaint);
+        ripplePaint.setAlpha(ripplePaint.getAlpha() / 2);
 
         headerHeight = getResources().getDimensionPixelSize(R.dimen.calendar_card_header_height);
         float textHeight = paint.descent() - paint.ascent();
         textOffset = (textHeight / 2) - paint.descent();
 
-        rippleAnimator.setDuration(400);
-        rippleAnimator.setInterpolator(new LinearInterpolator());
-        rippleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+    }
+
+    private ValueAnimator getAnimator(final int position) {
+        ValueAnimator animator = reusableAnimators.poll();
+        if (animator == null) {
+            animator = createAnimator();
+        }
+        animator.addListener(new AnimatorListenerAdapter() {
             @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                invalidate();
+            public void onAnimationCancel(Animator animation) {
+                if (touchedPosition != position) {
+                    recycleAnimator(position);
+                }
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (touchedPosition != position) {
+                    recycleAnimator(position);
+                }
             }
         });
+
+        animator.addUpdateListener(updateListener);
+        animator.setDuration(400);
+        animatorMap.put(position, animator);
+        return animator;
+    }
+
+    private void recycleAnimator(int position) {
+        ValueAnimator animator = animatorMap.remove(position);
+        reusableAnimators.add(animator);
+        animator.removeAllListeners();
+    }
+
+    private ValueAnimator createAnimator() {
+        ValueAnimator rippleAnimator = ValueAnimator.ofFloat(0, cellSize / 2f);
+        rippleAnimator.setInterpolator(new LinearInterpolator());
+        return rippleAnimator;
     }
 
     @Override
@@ -101,7 +148,6 @@ public class CalendarCardView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         width = w;
         cellSize = w / 7f;
-        rippleAnimator.setFloatValues(0, cellSize / 2f);
     }
 
     @Override
@@ -122,9 +168,13 @@ public class CalendarCardView extends View {
             for (int j = 0; j < 7; j++) {
 //                canvas.drawRect(cellX+1, cellY+1, cellX + cellSize-1, cellY + cellSize-1, backgroundPaint);
 //                canvas.drawRect(cellX, cellY, cellX + cellSize, cellY + cellSize, circlePaint);
-                if (touchedPosition == counter) {
-                    canvas.drawCircle(x, cellY + cellSize / 2f, cellSize / 2f, circlePaint);
-                    canvas.drawCircle(x, cellY + cellSize / 2f, (Float) rippleAnimator.getAnimatedValue(), ripplePaint);
+                for (Map.Entry<Integer, ValueAnimator> entry : animatorMap.entrySet()) {
+                    if (entry.getKey() == counter) {
+                        Float animatedValue = (Float) entry.getValue().getAnimatedValue();
+                        circlePaint.setAlpha((int) (ripplePaint.getAlpha() * animatedValue / cellSize));
+                        canvas.drawCircle(x, cellY + cellSize / 2f, cellSize / 2f, circlePaint);
+                        canvas.drawCircle(x, cellY + cellSize / 2f, animatedValue, ripplePaint);
+                    }
                 }
                 canvas.drawText(String.valueOf(dayNumbers[counter++]), x, y, paint);
                 x += cellSize;
@@ -157,6 +207,7 @@ public class CalendarCardView extends View {
             month.set(Calendar.DAY_OF_WEEK, firstDayOfWeek);
         }
         for (int i = 0; i < dayNumbers.length; i++) {
+            dayTimestamp[i] = month.getTimeInMillis();
             dayNumbers[i] = month.get(Calendar.DAY_OF_MONTH);
             if (i < 7) {
                 dayLabels[i] = month.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT, Locale.getDefault());
@@ -170,18 +221,33 @@ public class CalendarCardView extends View {
         final float x = event.getX();
         final float y = event.getY();
 
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            final float yOffset = textOffset + headerHeight;
-            if (y > yOffset) {
-                int newTouchedPosition = (int) ((y - yOffset) / cellSize) * 7 + (int) (x / cellSize);
-                if(newTouchedPosition != touchedPosition){
-                    touchedPosition = newTouchedPosition;
-                    rippleAnimator.start();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN: {
+                final float yOffset = textOffset + headerHeight;
+                if (y > yOffset) {
+                    int newTouchedPosition = (int) ((y - yOffset) / cellSize) * 7 + (int) (x / cellSize);
+                    if (newTouchedPosition != touchedPosition) {
+                        touchedPosition = newTouchedPosition;
+                        getAnimator(touchedPosition).start();
+                    }
                 }
+                break;
             }
-        }else if(event.getAction() == MotionEvent.ACTION_UP){
-            touchedPosition = -1;
-            invalidate();
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL: {
+                ValueAnimator animator = animatorMap.get(touchedPosition);
+                if (animator != null) {
+                    if (animator.isRunning()) {
+                        animator.setDuration(200);
+                    } else {
+                        recycleAnimator(touchedPosition);
+                        postInvalidate();
+                    }
+                }
+                touchedPosition = -1;
+                break;
+            }
+
         }
         return true;
     }
