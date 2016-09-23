@@ -3,12 +3,16 @@ package com.wagos.calendarcard;
 import android.view.View;
 import android.view.ViewGroup;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 
 /**
  * Created by Wagos
  */
 public class CalendarCardPagerAdapter extends RecyclePagerAdapter {
+
+    private final ArrayList<Long> selectedDates = new ArrayList<>();
+
     @Override
     protected Object getItem(int position) {
         return position - CalendarCardPager.OFFSET;
@@ -19,6 +23,7 @@ public class CalendarCardPagerAdapter extends RecyclePagerAdapter {
         CalendarCardView calendar;
         if (convertView == null) {
             calendar = new CalendarCardView(parent.getContext());
+            calendar.setSelectedDates(selectedDates);
         } else {
             calendar = (CalendarCardView) convertView;
         }
